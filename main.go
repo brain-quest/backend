@@ -13,6 +13,8 @@ import (
 	"syscall"
 	"time"
 
+	paseto "aidanwoods.dev/go-paseto"
+	"github.com/joho/godotenv"
 	_ "github.com/joho/godotenv/autoload"
 	_ "github.com/lib/pq"
 )
@@ -50,6 +52,19 @@ func main() {
 	}
 	testDB.Close()
 
+	logger.Println("[i] Verificando chave PASETO...")
+	if os.Getenv("paseto_key") == "" {
+		logger.Println("[w] Criando chave...")
+		key := paseto.NewV4SymmetricKey()
+		os.Setenv("paseto_key", key.ExportHex())
+
+		f, _ := os.Open(".env")
+		envmap, _ := godotenv.Parse(f)
+		envmap["paseto_key"] = key.ExportHex()
+
+		godotenv.Write(envmap, ".env")
+	}
+
 	logger.Println("[i] Iniciando rotas...")
 	r := http.NewServeMux()
 
@@ -58,7 +73,7 @@ func main() {
 	r.HandleFunc("POST /login/auth", login)
 
 	//Rotas do usuário
-	r.HandleFunc("POST /user/info", userInfo)
+	r.HandleFunc("GET /user/info", userInfo)
 
 	//Rotas das perguntas
 	r.HandleFunc("POST /quest/question/{id}", buscarQuestaoId)
