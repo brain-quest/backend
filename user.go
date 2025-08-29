@@ -187,38 +187,52 @@ type UserData struct {
 	} `json:"questões_data"`
 }
 
+type UserDataFromToken struct {
+	User    UserData
+	Status  int
+	Message string
+}
+
 func userInfo(w http.ResponseWriter, r *http.Request) {
+	userData := getUserData(r)
+
+	if userData.Status != 200 {
+		enviarErrorJson(w, userData.Message, userData.Status)
+		return
+	}
+
+	enviarRespostaJson(w, userData.User, userData.Status)
+}
+
+func getUserData(r *http.Request) UserDataFromToken {
 	authToken := r.Header.Get("Authorization")
 	if authToken == "" {
-		enviarErrorJson(w, "Token faltando ou incorreta", 400)
-		return
+		return UserDataFromToken{Message: "Token faltando ou incorreta", Status: 400}
 	}
 
 	authToken = authToken[7:]
 
 	key, err := paseto.V4SymmetricKeyFromHex(os.Getenv("paseto_key"))
 	if err != nil {
-		enviarErrorJson(w, "Erro de chave", 500)
-		return
+		logger.Println("[e] Erro de chave PASETO:", err)
+		return UserDataFromToken{Message: "Erro de chave", Status: 500}
 	}
 
 	parseto := paseto.NewParser()
 	token, err := parseto.ParseV4Local(key, authToken, nil)
 	if err != nil {
-		enviarErrorJson(w, "Token faltando ou incorreta", 401)
-		return
+		return UserDataFromToken{Message: "Token faltando ou incorreta", Status: 401}
 	}
 
 	id, err := token.GetString("id")
 	if err != nil {
-		enviarErrorJson(w, "Token faltando ou incorreta", 401)
-		return
+		return UserDataFromToken{Message: "Token faltando ou incorreta", Status: 400}
 	}
 
 	conn, err := OpenConn()
 	if err != nil {
-		enviarErrorJson(w, "Erro ao conectar ao banco", 504)
-		return
+		logger.Println("[e] Erro de conexão ao BD:", err)
+		return UserDataFromToken{Message: "Não foi possível encontrar o usuário no banco", Status: 504}
 	}
 	defer conn.Close()
 
@@ -245,13 +259,11 @@ func userInfo(w http.ResponseWriter, r *http.Request) {
 		&userData.Questões.UltimoLogin,
 	)
 	if err == sql.ErrNoRows {
-		enviarErrorJson(w, "O usuário não existe", 404)
-		return
+		return UserDataFromToken{Message: "O usuário não existe mais", Status: 404}
 	} else if err != nil {
-		logger.Println("[e]", err)
-		enviarErrorJson(w, "Algo deu errado", 500)
-		return
+		logger.Println("[e] Erro ao buscar dados: ", err)
+		return UserDataFromToken{Message: "Algo não deu certo", Status: 500}
 	}
 
-	enviarRespostaJson(w, userData, 200)
+	return UserDataFromToken{User: userData, Message: "ok", Status: 200}
 }
