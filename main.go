@@ -14,9 +14,9 @@ import (
 	"time"
 
 	paseto "aidanwoods.dev/go-paseto"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 	_ "github.com/joho/godotenv/autoload"
-	_ "github.com/lib/pq"
 )
 
 var logger *log.Logger
@@ -32,8 +32,8 @@ func iniciarLogs() {
 }
 
 func OpenConn() (*sql.DB, error) {
-	auth := os.Getenv("postgres")
-	db, err := sql.Open("postgres", "dbname=brainquest sslmode=disable "+auth)
+	auth := os.Getenv("mariadb")
+	db, err := sql.Open("mysql", auth)
 	if err != nil {
 		panic(err)
 	}

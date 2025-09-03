@@ -10,8 +10,8 @@ import (
 	"time"
 
 	paseto "aidanwoods.dev/go-paseto"
+	"github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 	"github.com/paemuri/brdoc"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -41,9 +41,13 @@ func registrar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(novoUsuario.Senha), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(novoUsuario.Senha), bcrypt.DefaultCost)
+	if err != nil {
+		enviarErrorJson(w, "Falha ao criar hash do password", 500)
+		return
+	}
 
-	ruuid := uuid.New()
+	ruuid := uuid.New().String()
 
 	conn, err := OpenConn()
 	if err != nil {
@@ -52,21 +56,18 @@ func registrar(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	_, err = conn.Exec("INSERT INTO users (id, email, senha, cpf, nome, telefone) VALUES ($1, $2, $3, $4, $5, $6)", ruuid, novoUsuario.Email, hashedPassword, novoUsuario.Cpf, novoUsuario.Username, novoUsuario.Telefone)
+	_, err = conn.Exec("INSERT INTO users (id, email, senha, cpf, nome, telefone) VALUES (?, ?, ?, ?, ?, ?)", ruuid, novoUsuario.Email, hashedPassword, novoUsuario.Cpf, novoUsuario.Username, novoUsuario.Telefone)
 	if err != nil {
-		var pqErr *pq.Error
-		if errors.As(err, &pqErr) {
-			if pqErr.Code == "23505" {
-				if pqErr.Constraint == "users_email_key" || pqErr.Constraint == "users_cpf_key" {
-					enviarErrorJson(w, "email ou cpf já cadastrado", 403)
-					return
-				}
-				logger.Printf("violação de unicidade: %v", pqErr.Constraint)
+		var mysqlErr *mysql.MySQLError
+		if errors.As(err, &mysqlErr) {
+			if mysqlErr.Number == 1062 { // ER_DUP_ENTRY
+				enviarErrorJson(w, "email ou cpf já cadastrado", http.StatusForbidden)
 				return
 			}
 		}
-		logger.Println(err)
-		enviarErrorJson(w, "algo deu errado ao criar usuário", 500)
+
+		logger.Println("[e] Erro ao inserir usuário:", err)
+		enviarErrorJson(w, "algo deu errado ao criar usuário", http.StatusInternalServerError)
 		return
 	}
 
@@ -136,7 +137,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	var senhaSalva, uuidUsuario string
 
-	err = conn.QueryRow("SELECT senha, id FROM users WHERE email = $1", dadosLogin.Email).Scan(&senhaSalva, &uuidUsuario)
+	err = conn.QueryRow("SELECT senha, id FROM users WHERE email = ?", dadosLogin.Email).Scan(&senhaSalva, &uuidUsuario)
 	if err == sql.ErrNoRows {
 		enviarErrorJson(w, "Usuário ou senha incorretas", 401)
 		return
@@ -151,13 +152,29 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	//atualiza o ultimo_login, e verifica o streak
+	if _, err := conn.Exec(`UPDATE dados
+    SET 
+      ultimo_login = CURDATE(),
+      dias_logados = CASE
+        WHEN DATEDIFF(CURDATE(), ultimo_login) = 1 THEN dias_logados + 1
+        WHEN DATEDIFF(CURDATE(), ultimo_login) = 0 THEN dias_logados
+        ELSE 1
+      END
+    WHERE id = ?;`,
+		uuidUsuario,
+	); err != nil {
+		// se der errado, ignorar e continua o login
+		logger.Printf("[w] falha ao atualizar ultimo_login de %v: %v\n", uuidUsuario, err)
+	}
+
 	//devolver token
 	token := paseto.NewToken()
 	exp := time.Now()
 
 	token.SetIssuedAt(exp)
 	token.SetNotBefore(exp)
-	token.SetExpiration(exp.Add(2 * time.Hour))
+	token.SetExpiration(exp.Add(6 * time.Hour))
 
 	token.SetString("id", uuidUsuario)
 
@@ -243,10 +260,10 @@ func getUserData(r *http.Request) UserDataFromToken {
     SELECT 
         u.email, u.cpf, u.nome, u.telefone,
         d.quest_feitas, d.alternativas_acertas, d.alternativas_erradas,
-        d.dias_logados, EXTRACT(EPOCH FROM d.ultimo_login)::bigint
+        d.dias_logados, UNIX_TIMESTAMP(d.ultimo_login)
     FROM users u
     JOIN dados d ON u.id = d.id
-    WHERE u.id = $1
+    WHERE u.id = ?
 `, id).Scan(
 		&userData.Email,
 		&userData.CPF,
