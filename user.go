@@ -221,10 +221,16 @@ func userInfo(w http.ResponseWriter, r *http.Request) {
 	enviarRespostaJson(w, userData.User, userData.Status)
 }
 
-func getUserData(r *http.Request) UserDataFromToken {
+type UserUUID struct {
+	Status  int
+	Message string
+	UUID    string
+}
+
+func getUserUUID(r *http.Request) UserUUID {
 	authToken := r.Header.Get("Authorization")
 	if authToken == "" {
-		return UserDataFromToken{Message: "Token faltando ou incorreta", Status: 400}
+		return UserUUID{Message: "Token faltando ou incorreta", Status: 400}
 	}
 
 	authToken = authToken[7:]
@@ -232,19 +238,31 @@ func getUserData(r *http.Request) UserDataFromToken {
 	key, err := paseto.V4SymmetricKeyFromHex(os.Getenv("paseto_key"))
 	if err != nil {
 		logger.Println("[e] Erro de chave PASETO:", err)
-		return UserDataFromToken{Message: "Erro de chave", Status: 500}
+		return UserUUID{Message: "Erro de chave", Status: 500}
 	}
 
 	parseto := paseto.NewParser()
 	token, err := parseto.ParseV4Local(key, authToken, nil)
 	if err != nil {
-		return UserDataFromToken{Message: "Token faltando ou incorreta", Status: 401}
+		return UserUUID{Message: "Token faltando ou incorreta", Status: 401}
 	}
 
 	id, err := token.GetString("id")
 	if err != nil {
-		return UserDataFromToken{Message: "Token faltando ou incorreta", Status: 400}
+		return UserUUID{Message: "Token faltando ou incorreta", Status: 400}
 	}
+
+	return UserUUID{Status: 200, Message: "Usuário OK", UUID: id}
+}
+
+func getUserData(r *http.Request) UserDataFromToken {
+	id := getUserUUID(r)
+	if id.Status != 200 {
+		return UserDataFromToken{Message: id.Message, Status: id.Status}
+	}
+
+	var userData UserData
+	userData.UUID = id.UUID
 
 	conn, err := OpenConn()
 	if err != nil {
@@ -252,9 +270,6 @@ func getUserData(r *http.Request) UserDataFromToken {
 		return UserDataFromToken{Message: "Não foi possível encontrar o usuário no banco", Status: 504}
 	}
 	defer conn.Close()
-
-	var userData UserData
-	userData.UUID = id
 
 	err = conn.QueryRow(`
     SELECT 

@@ -76,7 +76,10 @@ func main() {
 	r.HandleFunc("GET /user/info", userInfo)
 
 	//Rotas das perguntas
-	r.HandleFunc("POST /quest/question/{id}", buscarQuestaoId)
+	r.HandleFunc("GET /quest/question/query/{id}", buscarQuestaoId)
+	//Obtem a pergunta de id {id}
+	r.HandleFunc("POST /quest/question/answer/{id}", responderQuestaoId)
+	//Responde a pergunta de {id}
 
 	server := http.Server{
 		Addr:              os.Getenv("porta"),

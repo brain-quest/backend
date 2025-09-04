@@ -1,110 +1,178 @@
-# Endpoints da API
+# Documentação da API
 
-## /login/register
+Base URL: `https://dev.dataru-ufu.com.br/`  
+Formato de resposta: `application/json`  
+Autenticação: **PASETO v4.local**, enviado no header `Authorization: Bearer <token>`
 
-| **Meteodo** |   **Caminho**   | **Body** |
-|:-----------:|:---------------:|:--------:|
-|     POST    | /login/register |   JSON   |
+---
 
-Exemplo de JSON:
+## Fluxo básico
+1. Registrar usuário (`POST /user/register`)
+2. Fazer login (`POST /user/login`) → retorna token
+3. Usar token nas outras rotas (`Authorization: Bearer <token>`)
 
+---
+
+## Endpoints
+
+### POST /user/register
+
+#### Descrição
+Cria um novo usuário.
+
+#### Requisição
+- **Headers:**
+  - `Content-Type: application/json`
+- **Body (JSON):**
 ```json
 {
-    "email":"example@ufu.br",
-    "senha":"12345678",
-    "cpf":"000.000.000-00",
-    "username":"um nome",
-    "telefone":"00123456789"
+  "username": "Fulano",
+  "cpf": "12345678900",
+  "email": "fulano@ufu.br",
+  "password": "senha123",
+  "telephone": "34999999999"
 }
 ```
 
-Se não houver telefone, a chave `telefone` não deve estar presente.
-
-### Resposta
-
-| **Status** |                **Motivo/Mensagem**                |
-|:----------:|:-------------------------------------------------:|
-|     200    |        Dados ok, registro feito com sucesso       |
-|     400    |         Teste do CPF/Email retornaram erro        |
-|     403    | Já existe um usuário com o email ou CPF informado |
-|     500    |             Erro interno da aplicação             |
-
-## /login/auth
-
-| **Meteodo** |   **Caminho**   | **Body** |
-|:-----------:|:---------------:|:--------:|
-|     POST    |   /login/auth   |   JSON   |
-
-Exemplo de JSON:
-
+#### Resposta de Sucesso (201)
 ```json
 {
-    "email":"example@ufu.br",
-    "password":"12345678",
+  "message": "Usuário criado com sucesso"
 }
 ```
 
-### Resposta de Autenticação
+#### Possíveis Erros
+- **403** → email ou cpf já cadastrados
+- **500** → erro interno
 
-| **Status** |        **Motivo/Mensagem**        |
-|:----------:|:---------------------------------:|
-|     200    | Dados ok, login feito com sucesso |
-|     401    |      Email ou senha incorreta     |
-|     500    |     Erro interno da aplicação     |
+---
 
-Se o status for 200, o seguinte JSON será retornado:
+### POST /user/login
 
+#### Descrição
+Autentica usuário e retorna token.
+
+#### Requisição
+- **Headers:**
+  - `Content-Type: application/json`
+- **Body (JSON):**
 ```json
 {
-    "token": "v4.local.TokenPaseto....",
-    "expiration": 1756429734
+  "email": "fulano@ufu.br",
+  "password": "senha123"
 }
 ```
 
-## /user/info
-
-| **Meteodo** |   **Caminho**   | **Header** |
-|:-----------:|:---------------:|:--------:|
-|     GET     |   /user/info   |   Authorization   |
-
-É necessário o header com a token de autorização, que deve ser recebida após realizar o login no endpoint acima.
-
-| **Status** |             **Motivo/Mensagem**            |
-|:----------:|:------------------------------------------:|
-|     200    |   Dados ok, JSON com os dados do usuário   |
-|     400    |         Token faltando ou incorreta        |
-|     401    |               Token inválida.              |
-|     404    | Token válida, mas usuário não existe mais. |
-|     500    |          Erro interno da aplicação         |
-|     506    |       Erro ao buscar usuário no banco      |
-
-JSON de resposta, caso 200:
-
+#### Resposta de Sucesso (200)
 ```json
 {
-    "uuid": "5bdb74ca-adb3-4d8a-adc3-f2e420310170",
-    "name": "um nome",
-    "cpf": "000.000.000-00",
-    "email": "example@ufu.br",
-    "questões_data": {
-        "respondidas": 0,
-        "acertos": 0,
-        "erros": 0,
-        "login_streak": 0,
-        "last_login": 1756339200
-    }
+  "token": "v4.local.ABC...",
+  "expiration": 1756339200
 }
 ```
 
-## /quest/question/{id}
+#### Possíveis Erros
+- **401** → credenciais inválidas
+- **500** → erro interno
 
-(POST)
-header necessário: authorization, com a token
-body: json com a letra da pergunta
-{id}: id da pergunta
+---
 
-+= Resposta
-202: acertou;
-204: errou;
-400: faltou a token;
-401: token invalida.
+### GET /user/info
+
+#### Descrição
+Retorna informações do usuário autenticado.
+
+#### Requisição
+- **Headers:**
+  - `Authorization: Bearer <token>`
+
+#### Resposta de Sucesso (200)
+```json
+{
+  "uuid": "5bdb74ca-adb3-4d8a-adc3-f2e420310170",
+  "name": "Fulano da Silva",
+  "cpf": "123.456.789-00",
+  "email": "fulano@ufu.br",
+  "telephone": "34999999999",
+  "questões_data": {
+    "respondidas": 42,
+    "acertos": 30,
+    "erros": 12,
+    "login_streak": 5,
+    "last_login": 1756339200
+  }
+}
+```
+
+#### Possíveis Erros
+- **400** → token ausente
+- **401** → token inválido
+- **404** → usuário não encontrado
+- **500** → erro interno
+
+---
+
+### GET /quest/question/{id}
+
+#### Descrição
+Busca questão pelo ID.
+
+#### Requisição
+- **Path Params:**
+  - `id` → ID numérico da questão
+- **Headers:**
+  - `Authorization: Bearer <token>`
+
+#### Resposta de Sucesso (200)
+```json
+{
+  "pergunta": "Qual é a capital da França?",
+  "alternativa_a": "Paris",
+  "alternativa_b": "Roma",
+  "alternativa_c": "Berlim",
+  "alternativa_d": "Madri",
+  "alternativa_e": "Londres"
+}
+```
+
+#### Possíveis Erros
+- **401** → token inválido
+- **404** → questão não encontrada
+- **500** → erro interno
+
+---
+
+### POST /quest/question/answer/{id}
+
+#### Descrição
+Responde uma questão pelo ID e atualiza estatísticas do usuário.
+
+#### Requisição
+- **Path Params:**
+  - `id` → ID numérico da questão
+- **Headers:**
+  - `Authorization: Bearer <token>`
+  - `Content-Type: application/json`
+- **Body (JSON):**
+```json
+{
+  "alternativa": "A"
+}
+```
+
+#### Resposta de Sucesso
+- **202** → resposta correta
+- **204** → resposta incorreta
+
+Exemplo (caso o usuário acerte):
+```json
+{
+    "pergunta": "When was the first offshore deep reservoir in Brazil developed?",
+    "resposta": "E"
+}
+```
+
+#### Possíveis Erros
+- **401** → token inválido
+- **404** → usuário ou questão não encontrados
+- **500** → erro interno
