@@ -17,6 +17,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 	_ "github.com/joho/godotenv/autoload"
+	"github.com/rs/cors"
 )
 
 var logger *log.Logger
@@ -69,21 +70,36 @@ func main() {
 	r := http.NewServeMux()
 
 	//Rotas de login
-	r.Handle("/login/register", corsMiddleware(http.HandlerFunc(registrar)))
-	r.Handle("/login/auth", corsMiddleware(http.HandlerFunc(login)))
+	r.HandleFunc("/login/register", registrar)
+	r.HandleFunc("/login/auth", login)
 
 	//Rotas do usuário
-	r.Handle("/user/info", corsMiddleware(http.HandlerFunc(userInfo)))
+	r.HandleFunc("/user/info", userInfo)
 
 	//Rotas das perguntas
-	r.Handle("/quest/question/query/{id}", corsMiddleware(http.HandlerFunc(buscarQuestaoId)))
+	r.HandleFunc("/quest/question/query/{id}", buscarQuestaoId)
 	//Obtem a pergunta de id {id}
-	r.Handle("/quest/question/answer/{id}", corsMiddleware(http.HandlerFunc(responderQuestaoId)))
+	r.HandleFunc("/quest/question/answer/{id}", responderQuestaoId)
 	//Responde a pergunta de {id}
+
+	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("healthy."))
+	})
+
+	c := cors.New(cors.Options{
+		AllowedOrigins:      []string{"*"},
+		AllowedMethods:      []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:      []string{"*"},
+		AllowCredentials:    true,
+		AllowPrivateNetwork: true,
+	})
+
+	corsHandler := c.Handler(r)
 
 	server := http.Server{
 		Addr:              os.Getenv("porta"),
-		Handler:           r,
+		Handler:           corsHandler,
 		ErrorLog:          logger,
 		ReadHeaderTimeout: 10 * time.Second,
 	}

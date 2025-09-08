@@ -11,6 +11,7 @@ require (
 	aidanwoods.dev/go-paseto v1.5.4
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
+	github.com/rs/cors v1.11.1
 	golang.org/x/crypto v0.41.0
 )
 
