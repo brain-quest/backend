@@ -29,8 +29,8 @@ Cria um novo usuário.
   "username": "Fulano",
   "cpf": "12345678900",
   "email": "fulano@ufu.br",
-  "password": "senha123",
-  "telephone": "34999999999"
+  "senha": "senha123",
+  "telefone": "34999999999"
 }
 ```
 
