@@ -69,16 +69,16 @@ func main() {
 	r := http.NewServeMux()
 
 	//Rotas de login
-	r.Handle("POST /login/register", corsMiddleware(http.HandlerFunc(registrar)))
-	r.Handle("POST /login/auth", corsMiddleware(http.HandlerFunc(login)))
+	r.Handle("/login/register", corsMiddleware(http.HandlerFunc(registrar)))
+	r.Handle("/login/auth", corsMiddleware(http.HandlerFunc(login)))
 
 	//Rotas do usuário
-	r.Handle("GET /user/info", corsMiddleware(http.HandlerFunc(userInfo)))
+	r.Handle("/user/info", corsMiddleware(http.HandlerFunc(userInfo)))
 
 	//Rotas das perguntas
-	r.Handle("GET /quest/question/query/{id}", corsMiddleware(http.HandlerFunc(buscarQuestaoId)))
+	r.Handle("/quest/question/query/{id}", corsMiddleware(http.HandlerFunc(buscarQuestaoId)))
 	//Obtem a pergunta de id {id}
-	r.Handle("POST /quest/question/answer/{id}", corsMiddleware(http.HandlerFunc(responderQuestaoId)))
+	r.Handle("/quest/question/answer/{id}", corsMiddleware(http.HandlerFunc(responderQuestaoId)))
 	//Responde a pergunta de {id}
 
 	server := http.Server{

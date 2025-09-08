@@ -18,6 +18,10 @@ type Pergunta struct {
 }
 
 func buscarQuestaoId(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodOptions && r.Method != http.MethodGet {
+		w.WriteHeader(406)
+		return
+	}
 	questionID := r.PathValue("id")
 	qid, err := strconv.Atoi(questionID)
 	if questionID == "" || err != nil {
@@ -67,6 +71,10 @@ type RespostaQuiz struct {
 }
 
 func responderQuestaoId(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodOptions && r.Method != http.MethodPost {
+		w.WriteHeader(406)
+		return
+	}
 	questionID := r.PathValue("id")
 	if questionID == "" {
 		enviarErrorJson(w, "ID da pergunta vazio", 400)

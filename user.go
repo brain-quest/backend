@@ -25,6 +25,10 @@ type Register struct {
 }
 
 func registrar(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodOptions && r.Method != http.MethodPost {
+		w.WriteHeader(406)
+		return
+	}
 	var novoUsuario Register
 
 	d := json.NewDecoder(r.Body)
@@ -111,6 +115,10 @@ func validarDadosLogin(r LoginData) bool {
 }
 
 func login(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodOptions && r.Method != http.MethodPost {
+		w.WriteHeader(406)
+		return
+	}
 	var dadosLogin LoginData
 
 	d := json.NewDecoder(r.Body)
@@ -211,6 +219,10 @@ type UserDataFromToken struct {
 }
 
 func userInfo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodOptions && r.Method != http.MethodGet {
+		w.WriteHeader(406)
+		return
+	}
 	userData := getUserData(r)
 
 	if userData.Status != 200 {
