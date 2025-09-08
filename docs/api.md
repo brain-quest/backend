@@ -7,15 +7,15 @@ Autenticação: **PASETO v4.local**, enviado no header `Authorization: Bearer <t
 ---
 
 ## Fluxo básico
-1. Registrar usuário (`POST /user/register`)
-2. Fazer login (`POST /user/login`) → retorna token
+1. Registrar usuário (`POST /login/register`)
+2. Fazer login (`POST /login/auth`) → retorna token
 3. Usar token nas outras rotas (`Authorization: Bearer <token>`)
 
 ---
 
 ## Endpoints
 
-### POST /user/register
+### POST /login/register
 
 #### Descrição
 Cria um novo usuário.
@@ -47,7 +47,7 @@ Cria um novo usuário.
 
 ---
 
-### POST /user/login
+### POST /login/auth
 
 #### Descrição
 Autentica usuário e retorna token.
@@ -112,7 +112,7 @@ Retorna informações do usuário autenticado.
 
 ---
 
-### GET /quest/question/{id}
+### GET /quest/question/query/{id}
 
 #### Descrição
 Busca questão pelo ID.
