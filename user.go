@@ -291,7 +291,7 @@ func getUserData(r *http.Request) UserDataFromToken {
     FROM users u
     JOIN dados d ON u.id = d.id
     WHERE u.id = ?
-`, id).Scan(
+`, id.UUID).Scan(
 		&userData.Email,
 		&userData.CPF,
 		&userData.Name,
