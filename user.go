@@ -178,11 +178,11 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	//devolver token
 	token := paseto.NewToken()
-	exp := time.Now()
+	//exp := time.Now()
 
-	token.SetIssuedAt(exp)
-	token.SetNotBefore(exp)
-	token.SetExpiration(exp.Add(6 * time.Hour))
+	token.SetIssuedAt(time.Now())
+	token.SetNotBefore(time.Now())
+	token.SetExpiration(time.Now().Add(6 * time.Hour))
 
 	token.SetString("id", uuidUsuario)
 
@@ -194,7 +194,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	encrypted := token.V4Encrypt(key, nil)
 
-	enviarRespostaJson(w, LoginResponse{Token: encrypted, Expires: exp.Unix()}, 200)
+	enviarRespostaJson(w, LoginResponse{Token: encrypted, Expires: time.Now().Add(6 * time.Hour).Unix()}, 200)
 }
 
 type UserData struct {
