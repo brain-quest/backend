@@ -182,7 +182,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	token.SetIssuedAt(time.Now())
 	token.SetNotBefore(time.Now())
-	token.SetExpiration(time.Now().Add(6 * time.Hour))
+	token.SetExpiration(time.Now().Add(36 * time.Hour))
 
 	token.SetString("id", uuidUsuario)
 
@@ -193,8 +193,9 @@ func login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	encrypted := token.V4Encrypt(key, nil)
+	exp, _ := token.GetExpiration()
 
-	enviarRespostaJson(w, LoginResponse{Token: encrypted, Expires: time.Now().Add(6 * time.Hour).Unix()}, 200)
+	enviarRespostaJson(w, LoginResponse{Token: encrypted, Expires: exp.Unix()}, 200)
 }
 
 type UserData struct {
@@ -204,11 +205,13 @@ type UserData struct {
 	Email     string  `json:"email"`
 	Telephone *string `json:"telephone,omitempty"`
 	Questões  struct {
-		Respondidas int   `json:"respondidas"`
-		Acertos     int   `json:"acertos"`
-		Erros       int   `json:"erros"`
-		Dias        int   `json:"login_streak"`
-		UltimoLogin int64 `json:"last_login"`
+		Respondidas       int      `json:"respondidas"`
+		Acertos           int      `json:"acertos"`
+		Erros             int      `json:"erros"`
+		Dias              int      `json:"login_streak"`
+		UltimoLogin       int64    `json:"last_login"`
+		QuestõesFeitas    []string `json:"feitas,omitempty"`
+		QuestõesAcertadas []string `json:"acertadas,omitempty"`
 	} `json:"questões_data"`
 }
 
@@ -229,6 +232,18 @@ func userInfo(w http.ResponseWriter, r *http.Request) {
 		enviarErrorJson(w, userData.Message, userData.Status)
 		return
 	}
+
+	questoesFeitas, err := listarQuestoesFeitas(userData.User.UUID)
+	if err != nil {
+		logger.Printf("[w] Não foi possível achar as questões feitas por %v: %v\n", userData.User.UUID, err)
+	}
+	questoesAcertadas, err := listarQuestoesAcertadas(userData.User.UUID)
+	if err != nil {
+		logger.Printf("[w] Não foi possível achar as questões acertadas por %v: %v\n", userData.User.UUID, err)
+	}
+
+	userData.User.Questões.QuestõesAcertadas = questoesAcertadas
+	userData.User.Questões.QuestõesFeitas = questoesFeitas
 
 	enviarRespostaJson(w, userData.User, userData.Status)
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 )
@@ -76,7 +77,8 @@ func responderQuestaoId(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	questionID := r.PathValue("id")
-	if questionID == "" {
+	qid, err := strconv.Atoi(questionID)
+	if questionID == "" || err != nil {
 		enviarErrorJson(w, "ID da pergunta vazio", 400)
 		return
 	}
@@ -90,10 +92,19 @@ func responderQuestaoId(w http.ResponseWriter, r *http.Request) {
 
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
-	err := d.Decode(&dadosResposta)
+	err = d.Decode(&dadosResposta)
 
 	if err != nil || d.More() {
 		enviarErrorJson(w, "Estrutura do JSON incorreta.", 401)
+		return
+	}
+
+	verificarIfDone, err := usuarioJaFez(uid.UUID, qid)
+	if err != nil {
+		logger.Printf("[w] Não foi possível verificar se %v já fez a questão %v: %v\n", uid.UUID, qid, err)
+	}
+	if verificarIfDone {
+		enviarErrorJson(w, "Usuário já respondeu essa pergunta", 409)
 		return
 	}
 
@@ -149,10 +160,53 @@ func responderQuestaoId(w http.ResponseWriter, r *http.Request) {
 		logger.Printf("[w] falha ao atualizar os dados de %v: %v\n", uid, err)
 	}
 
+	if err := registrarResposta(uid.UUID, qid, acertou); err != nil {
+		logger.Printf("[w] falha ao atualizar Redis de %v: %v\n", uid.UUID, err)
+	}
+
 	if !acertou {
 		enviarRespostaJson(w, pergunta, 204)
 		return
 	}
 
 	enviarRespostaJson(w, pergunta, 202)
+}
+
+func usuarioJaFez(userID string, questaoID int) (bool, error) {
+	key := fmt.Sprintf("user:%s:feitas", userID)
+	return rdb.SIsMember(ctx, key, questaoID).Result()
+}
+
+func usuarioAcertou(userID string, questaoID int) (bool, error) {
+	key := fmt.Sprintf("user:%s:acertos", userID)
+	return rdb.SIsMember(ctx, key, questaoID).Result()
+}
+
+func listarQuestoesFeitas(userID string) ([]string, error) {
+	key := fmt.Sprintf("user:%s:feitas", userID)
+	return rdb.SMembers(ctx, key).Result()
+}
+
+func listarQuestoesAcertadas(userID string) ([]string, error) {
+	key := fmt.Sprintf("user:%s:acertos", userID)
+	return rdb.SMembers(ctx, key).Result()
+}
+
+func registrarResposta(userID string, questaoID int, acertou bool) error {
+	keyFeitas := fmt.Sprintf("user:%s:feitas", userID)
+	keyAcertos := fmt.Sprintf("user:%s:acertos", userID)
+
+	//add a feitas
+	if err := rdb.SAdd(ctx, keyFeitas, questaoID).Err(); err != nil {
+		return err
+	}
+
+	//add a acertadas
+	if acertou {
+		if err := rdb.SAdd(ctx, keyAcertos, questaoID).Err(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

@@ -17,10 +17,13 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 	_ "github.com/joho/godotenv/autoload"
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/cors"
 )
 
 var logger *log.Logger
+var ctx = context.Background()
+var rdb *redis.Client
 
 func iniciarLogs() {
 	arquivoDeRegistro, err := os.OpenFile("server.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
@@ -45,13 +48,19 @@ func OpenConn() (*sql.DB, error) {
 func main() {
 	iniciarLogs()
 	testDB, err := OpenConn()
+	logger.Println("[i] Conectando ao MariDB...")
 	if err != nil {
-		if err.Error() == "pq: database \"brainquest\" does not exist" {
-			logger.Fatalln("É necessário que seja inserido no banco as tabelas necessárias.")
-		}
 		logger.Fatalln(err)
 	}
 	testDB.Close()
+	logger.Println("[i] MariDB ok.")
+	logger.Println("[i] Conectando ao Redis...")
+	rdb = redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       2,
+	})
+	logger.Println("[i] Redis ok.")
 
 	logger.Println("[i] Verificando chave PASETO...")
 	if os.Getenv("paseto_key") == "" {
