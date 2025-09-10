@@ -3,8 +3,10 @@ package main
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 type Pergunta struct {
@@ -18,6 +20,10 @@ type Pergunta struct {
 }
 
 func buscarQuestaoId(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodOptions && r.Method != http.MethodGet {
+		w.WriteHeader(406)
+		return
+	}
 	questionID := r.PathValue("id")
 	qid, err := strconv.Atoi(questionID)
 	if questionID == "" || err != nil {
@@ -67,8 +73,13 @@ type RespostaQuiz struct {
 }
 
 func responderQuestaoId(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodOptions && r.Method != http.MethodPost {
+		w.WriteHeader(406)
+		return
+	}
 	questionID := r.PathValue("id")
-	if questionID == "" {
+	qid, err := strconv.Atoi(questionID)
+	if questionID == "" || err != nil {
 		enviarErrorJson(w, "ID da pergunta vazio", 400)
 		return
 	}
@@ -82,10 +93,19 @@ func responderQuestaoId(w http.ResponseWriter, r *http.Request) {
 
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
-	err := d.Decode(&dadosResposta)
+	err = d.Decode(&dadosResposta)
 
 	if err != nil || d.More() {
 		enviarErrorJson(w, "Estrutura do JSON incorreta.", 401)
+		return
+	}
+
+	verificarIfDone, err := usuarioJaFez(uid.UUID, qid)
+	if err != nil {
+		logger.Printf("[w] Não foi possível verificar se %v já fez a questão %v: %v\n", uid.UUID, qid, err)
+	}
+	if verificarIfDone {
+		enviarErrorJson(w, "Usuário já respondeu essa pergunta", 409)
 		return
 	}
 
@@ -141,10 +161,86 @@ func responderQuestaoId(w http.ResponseWriter, r *http.Request) {
 		logger.Printf("[w] falha ao atualizar os dados de %v: %v\n", uid, err)
 	}
 
+	if err := registrarResposta(uid.UUID, qid, acertou); err != nil {
+		logger.Printf("[w] falha ao atualizar Redis de %v: %v\n", uid.UUID, err)
+	}
+
+	qzId := r.Header.Get("X-Quiz-ID")
+	if qzId != "" {
+		if !strings.HasPrefix(qzId, "quiz_") {
+			enviarErrorJson(w, "Header X-Quiz-ID incorreto", http.StatusNotAcceptable)
+			return
+		}
+		qzId = strings.TrimPrefix(qzId, "quiz_")
+		qzIdNum, err := strconv.Atoi(qzId)
+		if err != nil {
+			enviarErrorJson(w, "Header X-Quiz-ID com id não númerico", http.StatusNotAcceptable)
+			return
+		}
+
+		if err := registrarQuiz(uid.UUID, qzIdNum); err != nil {
+			logger.Printf("[w] falha ao atualizar quizzes (%v) feitos de %v: %v\n", qzId, uid.UUID, err)
+		}
+	}
+
 	if !acertou {
 		enviarRespostaJson(w, pergunta, 204)
 		return
 	}
 
 	enviarRespostaJson(w, pergunta, 202)
+}
+
+func usuarioJaFez(userID string, questaoID int) (bool, error) {
+	key := fmt.Sprintf("user:%s:feitas", userID)
+	return rdb.SIsMember(ctx, key, questaoID).Result()
+}
+
+func usuarioAcertou(userID string, questaoID int) (bool, error) {
+	key := fmt.Sprintf("user:%s:acertos", userID)
+	return rdb.SIsMember(ctx, key, questaoID).Result()
+}
+
+func listarQuestoesFeitas(userID string) ([]string, error) {
+	key := fmt.Sprintf("user:%s:feitas", userID)
+	return rdb.SMembers(ctx, key).Result()
+}
+
+func listarQuizzesFeitos(userID string) ([]string, error) {
+	key := fmt.Sprintf("user:%s:quizzes", userID)
+	return rdb.SMembers(ctx, key).Result()
+}
+
+func listarQuestoesAcertadas(userID string) ([]string, error) {
+	key := fmt.Sprintf("user:%s:acertos", userID)
+	return rdb.SMembers(ctx, key).Result()
+}
+
+func registrarQuiz(userID string, quizID int) error {
+	key := fmt.Sprintf("user:%s:quizzes", userID)
+
+	if err := rdb.SAdd(ctx, key, quizID).Err(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func registrarResposta(userID string, questaoID int, acertou bool) error {
+	keyFeitas := fmt.Sprintf("user:%s:feitas", userID)
+	keyAcertos := fmt.Sprintf("user:%s:acertos", userID)
+
+	//add a feitas
+	if err := rdb.SAdd(ctx, keyFeitas, questaoID).Err(); err != nil {
+		return err
+	}
+
+	//add a acertadas
+	if acertou {
+		if err := rdb.SAdd(ctx, keyAcertos, questaoID).Err(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

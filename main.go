@@ -17,9 +17,13 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 	_ "github.com/joho/godotenv/autoload"
+	"github.com/redis/go-redis/v9"
+	"github.com/rs/cors"
 )
 
 var logger *log.Logger
+var ctx = context.Background()
+var rdb *redis.Client
 
 func iniciarLogs() {
 	arquivoDeRegistro, err := os.OpenFile("server.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
@@ -44,13 +48,19 @@ func OpenConn() (*sql.DB, error) {
 func main() {
 	iniciarLogs()
 	testDB, err := OpenConn()
+	logger.Println("[i] Conectando ao MariaDB...")
 	if err != nil {
-		if err.Error() == "pq: database \"brainquest\" does not exist" {
-			logger.Fatalln("É necessário que seja inserido no banco as tabelas necessárias.")
-		}
 		logger.Fatalln(err)
 	}
 	testDB.Close()
+	logger.Println("[i] MariaDB ok.")
+	logger.Println("[i] Conectando ao Redis...")
+	rdb = redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       2,
+	})
+	logger.Println("[i] Redis ok.")
 
 	logger.Println("[i] Verificando chave PASETO...")
 	if os.Getenv("paseto_key") == "" {
@@ -69,21 +79,36 @@ func main() {
 	r := http.NewServeMux()
 
 	//Rotas de login
-	r.HandleFunc("POST /login/register", registrar)
-	r.HandleFunc("POST /login/auth", login)
+	r.HandleFunc("/login/register", registrar)
+	r.HandleFunc("/login/auth", login)
 
 	//Rotas do usuário
-	r.HandleFunc("GET /user/info", userInfo)
+	r.HandleFunc("/user/info", userInfo)
 
 	//Rotas das perguntas
-	r.HandleFunc("GET /quest/question/query/{id}", buscarQuestaoId)
+	r.HandleFunc("/quest/question/query/{id}", buscarQuestaoId)
 	//Obtem a pergunta de id {id}
-	r.HandleFunc("POST /quest/question/answer/{id}", responderQuestaoId)
+	r.HandleFunc("/quest/question/answer/{id}", responderQuestaoId)
 	//Responde a pergunta de {id}
+
+	r.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte("healthy."))
+	})
+
+	c := cors.New(cors.Options{
+		AllowedOrigins:      []string{"*"},
+		AllowedMethods:      []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:      []string{"*"},
+		AllowCredentials:    true,
+		AllowPrivateNetwork: true,
+	})
+
+	corsHandler := c.Handler(r)
 
 	server := http.Server{
 		Addr:              os.Getenv("porta"),
-		Handler:           r,
+		Handler:           corsHandler,
 		ErrorLog:          logger,
 		ReadHeaderTimeout: 10 * time.Second,
 	}

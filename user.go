@@ -25,6 +25,10 @@ type Register struct {
 }
 
 func registrar(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodOptions && r.Method != http.MethodPost {
+		w.WriteHeader(406)
+		return
+	}
 	var novoUsuario Register
 
 	d := json.NewDecoder(r.Body)
@@ -111,6 +115,10 @@ func validarDadosLogin(r LoginData) bool {
 }
 
 func login(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodOptions && r.Method != http.MethodPost {
+		w.WriteHeader(406)
+		return
+	}
 	var dadosLogin LoginData
 
 	d := json.NewDecoder(r.Body)
@@ -170,11 +178,11 @@ func login(w http.ResponseWriter, r *http.Request) {
 
 	//devolver token
 	token := paseto.NewToken()
-	exp := time.Now()
+	//exp := time.Now()
 
-	token.SetIssuedAt(exp)
-	token.SetNotBefore(exp)
-	token.SetExpiration(exp.Add(6 * time.Hour))
+	token.SetIssuedAt(time.Now())
+	token.SetNotBefore(time.Now())
+	token.SetExpiration(time.Now().Add(36 * time.Hour))
 
 	token.SetString("id", uuidUsuario)
 
@@ -185,6 +193,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	encrypted := token.V4Encrypt(key, nil)
+	exp, _ := token.GetExpiration()
 
 	enviarRespostaJson(w, LoginResponse{Token: encrypted, Expires: exp.Unix()}, 200)
 }
@@ -196,11 +205,14 @@ type UserData struct {
 	Email     string  `json:"email"`
 	Telephone *string `json:"telephone,omitempty"`
 	Questões  struct {
-		Respondidas int   `json:"respondidas"`
-		Acertos     int   `json:"acertos"`
-		Erros       int   `json:"erros"`
-		Dias        int   `json:"login_streak"`
-		UltimoLogin int64 `json:"last_login"`
+		Respondidas       int      `json:"respondidas"`
+		Acertos           int      `json:"acertos"`
+		Erros             int      `json:"erros"`
+		Dias              int      `json:"login_streak"`
+		UltimoLogin       int64    `json:"last_login"`
+		QuestõesFeitas    []string `json:"feitas,omitempty"`
+		QuestõesAcertadas []string `json:"acertadas,omitempty"`
+		Quizzes           []string `json:"quizzes,omitempty"`
 	} `json:"questões_data"`
 }
 
@@ -211,12 +223,33 @@ type UserDataFromToken struct {
 }
 
 func userInfo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodOptions && r.Method != http.MethodGet {
+		w.WriteHeader(406)
+		return
+	}
 	userData := getUserData(r)
 
 	if userData.Status != 200 {
 		enviarErrorJson(w, userData.Message, userData.Status)
 		return
 	}
+
+	questoesFeitas, err := listarQuestoesFeitas(userData.User.UUID)
+	if err != nil {
+		logger.Printf("[w] Não foi possível achar as questões feitas por %v: %v\n", userData.User.UUID, err)
+	}
+	questoesAcertadas, err := listarQuestoesAcertadas(userData.User.UUID)
+	if err != nil {
+		logger.Printf("[w] Não foi possível achar as questões acertadas por %v: %v\n", userData.User.UUID, err)
+	}
+	quizzesFeitos, err := listarQuizzesFeitos(userData.User.UUID)
+	if err != nil {
+		logger.Printf("[w] Não foi possível achar os quizzes feitos por %v: %v\n", userData.User.UUID, err)
+	}
+
+	userData.User.Questões.QuestõesAcertadas = questoesAcertadas
+	userData.User.Questões.QuestõesFeitas = questoesFeitas
+	userData.User.Questões.Quizzes = quizzesFeitos
 
 	enviarRespostaJson(w, userData.User, userData.Status)
 }
@@ -279,7 +312,7 @@ func getUserData(r *http.Request) UserDataFromToken {
     FROM users u
     JOIN dados d ON u.id = d.id
     WHERE u.id = ?
-`, id).Scan(
+`, id.UUID).Scan(
 		&userData.Email,
 		&userData.CPF,
 		&userData.Name,
