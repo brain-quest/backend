@@ -99,7 +99,20 @@ Retorna informações do usuário autenticado.
     "acertos": 30,
     "erros": 12,
     "login_streak": 5,
-    "last_login": 1756339200
+    "last_login": 1756339200,
+    "feitas": [
+            "10",
+            "11",
+            "12",
+            "13"
+        ],
+        "acertadas": [
+            "10",
+            "11"
+        ],
+        "quizzes": [
+            "1"
+        ]
   }
 }
 ```
@@ -153,6 +166,8 @@ Responde uma questão pelo ID e atualiza estatísticas do usuário.
 - **Headers:**
   - `Authorization: Bearer <token>`
   - `Content-Type: application/json`
+  - `X-Quiz-ID` (opcional): quiz_0
+    - Header que deve ser enviado após a ULTIMA questão do quiz ser respondida. Assim salva esse estado no backend. 0 deve ser o id do quiz que está sendo respondido
 - **Body (JSON):**
 ```json
 {
@@ -175,4 +190,6 @@ Exemplo (caso o usuário acerte):
 #### Possíveis Erros
 - **401** → token inválido
 - **404** → usuário ou questão não encontrados
+- **406** → header `X-Quiz-ID` incorreto
+- **409** → usuário já respondeu esse quiz
 - **500** → erro interno
