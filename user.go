@@ -212,6 +212,7 @@ type UserData struct {
 		UltimoLogin       int64    `json:"last_login"`
 		QuestõesFeitas    []string `json:"feitas,omitempty"`
 		QuestõesAcertadas []string `json:"acertadas,omitempty"`
+		Quizzes           []string `json:"quizzes,omitempty"`
 	} `json:"questões_data"`
 }
 
@@ -241,9 +242,14 @@ func userInfo(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.Printf("[w] Não foi possível achar as questões acertadas por %v: %v\n", userData.User.UUID, err)
 	}
+	quizzesFeitos, err := listarQuizzesFeitos(userData.User.UUID)
+	if err != nil {
+		logger.Printf("[w] Não foi possível achar os quizzes feitos por %v: %v\n", userData.User.UUID, err)
+	}
 
 	userData.User.Questões.QuestõesAcertadas = questoesAcertadas
 	userData.User.Questões.QuestõesFeitas = questoesFeitas
+	userData.User.Questões.Quizzes = quizzesFeitos
 
 	enviarRespostaJson(w, userData.User, userData.Status)
 }

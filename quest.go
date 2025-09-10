@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 type Pergunta struct {
@@ -164,6 +165,24 @@ func responderQuestaoId(w http.ResponseWriter, r *http.Request) {
 		logger.Printf("[w] falha ao atualizar Redis de %v: %v\n", uid.UUID, err)
 	}
 
+	qzId := r.Header.Get("X-Quiz-ID")
+	if qzId != "" {
+		if !strings.HasPrefix(qzId, "quiz_") {
+			enviarErrorJson(w, "Header X-Quiz-ID incorreto", http.StatusNotAcceptable)
+			return
+		}
+		qzId = strings.TrimPrefix(qzId, "quiz_")
+		qzIdNum, err := strconv.Atoi(qzId)
+		if err != nil {
+			enviarErrorJson(w, "Header X-Quiz-ID com id não númerico", http.StatusNotAcceptable)
+			return
+		}
+
+		if err := registrarQuiz(uid.UUID, qzIdNum); err != nil {
+			logger.Printf("[w] falha ao atualizar quizzes (%v) feitos de %v: %v\n", qzId, uid.UUID, err)
+		}
+	}
+
 	if !acertou {
 		enviarRespostaJson(w, pergunta, 204)
 		return
@@ -187,9 +206,24 @@ func listarQuestoesFeitas(userID string) ([]string, error) {
 	return rdb.SMembers(ctx, key).Result()
 }
 
+func listarQuizzesFeitos(userID string) ([]string, error) {
+	key := fmt.Sprintf("user:%s:quizzes", userID)
+	return rdb.SMembers(ctx, key).Result()
+}
+
 func listarQuestoesAcertadas(userID string) ([]string, error) {
 	key := fmt.Sprintf("user:%s:acertos", userID)
 	return rdb.SMembers(ctx, key).Result()
+}
+
+func registrarQuiz(userID string, quizID int) error {
+	key := fmt.Sprintf("user:%s:quizzes", userID)
+
+	if err := rdb.SAdd(ctx, key, quizID).Err(); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func registrarResposta(userID string, questaoID int, acertou bool) error {

@@ -48,12 +48,12 @@ func OpenConn() (*sql.DB, error) {
 func main() {
 	iniciarLogs()
 	testDB, err := OpenConn()
-	logger.Println("[i] Conectando ao MariDB...")
+	logger.Println("[i] Conectando ao MariaDB...")
 	if err != nil {
 		logger.Fatalln(err)
 	}
 	testDB.Close()
-	logger.Println("[i] MariDB ok.")
+	logger.Println("[i] MariaDB ok.")
 	logger.Println("[i] Conectando ao Redis...")
 	rdb = redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
